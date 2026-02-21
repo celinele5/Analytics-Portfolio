@@ -92,6 +92,7 @@ class ModelTrainer:
                 X_test=X_test,
                 y_test=y_test,
                 models=models,
+                params=params,
             )
 
             # Get best model score
