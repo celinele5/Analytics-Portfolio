@@ -8,6 +8,8 @@ from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+st.set_page_config(page_title="Japan Foodie Sentiment", layout="wide")
+
 # Tải bộ từ điển cảm xúc (Chỉ cần chạy 1 lần)
 @st.cache_resource
 def load_nltk():
@@ -60,7 +62,6 @@ def get_full_data_flexible(city_name, dish_name):
         return pd.DataFrame()
 
 # --- PHẦN 2: GIAO DIỆN ---
-st.set_page_config(page_title="Japan Foodie Sentiment", layout="wide")
 st.title("🏯 Japan Foodie Sentiment Platform")
 
 with st.sidebar:
