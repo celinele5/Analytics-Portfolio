@@ -5,7 +5,7 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from src.pipeline.predict_pipeline import CustomData, PredictPipeline
 
-application = Flask(__name__)
+application = Flask(__name__, template_folder="templates")
 app = application
 
 
@@ -20,6 +20,12 @@ def predict_datapoint():
     if request.method == "GET":
         return render_template("home.html")
     else:
+        try:
+            reading_score = float(request.form.get("reading_score"))
+            writing_score = float(request.form.get("writing_score"))
+        except (TypeError, ValueError):
+            return "Error: reading_score and writing_score must be numeric", 400
+
         data = CustomData(
             gender=request.form.get("gender"),
             race_ethnicity=request.form.get("race_ethnicity"),
@@ -30,15 +36,18 @@ def predict_datapoint():
             test_preparation_course=request.form.get(
                 "test_preparation_course"
             ),
-            reading_score=float(request.form.get("reading_score")),
-            writing_score=float(request.form.get("writing_score")),
+            reading_score=reading_score,
+            writing_score=writing_score,
         )
 
         pred_df = data.get_data_as_data_frame()
         print(pred_df)
 
-        predict_pipeline = PredictPipeline()
-        results = predict_pipeline.predict(pred_df)
+        try:
+            predict_pipeline = PredictPipeline()
+            results = predict_pipeline.predict(pred_df)
+        except Exception as e:
+            return f"Prediction error: {e}", 500
 
         return render_template("home.html", results=results[0])
 
