@@ -8,6 +8,9 @@ from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import matplotlib.pyplot as plt
 import seaborn as sns
 from wordcloud import WordCloud, STOPWORDS
+import plotly.express as px # THÊM CHÍNH XÁC DÒNG NÀY NÈ
+st.set_page_config(page_title="Japan Foodie Sentiment Platform", layout="wide")
+
 
 # Tải bộ từ điển cảm xúc (Chỉ chạy 1 lần và lưu vào bộ nhớ cache)
 @st.cache_resource
@@ -16,6 +19,15 @@ def load_nltk():
 
 load_nltk()
 sia = SentimentIntensityAnalyzer()
+@st.cache_resource
+
+@st.cache_resource
+def load_nltk():
+    nltk.download('vader_lexicon')
+    nltk.download('punkt')
+    nltk.download('punkt_tab')                 # THÊM CHÍNH XÁC DÒNG NÀY NÈ!
+    nltk.download('averaged_perceptron_tagger')
+    nltk.download('averaged_perceptron_tagger_eng') # Thêm luôn dòng này phòng hờ bản NLTK mới bắt bẻ nhãn tiếng Anh
 
 # --- VỊ TRÍ 1: TÍCH HỢP TỪ ĐIỂN MAPPING TỪ FILE JSON ĐÃ CHUẨN HÓA ---
 CITY_TO_PREF = {
@@ -247,7 +259,6 @@ def get_full_data_flexible(city_name, dish_name):
 
 # --- PHẦN 2: GIAO DIỆN WEB STREAMLIT ---
 # Dòng st.set_page_config BẮT BUỘC phải nằm ngay đây (lệnh hiển thị đầu tiên) để không bị lỗi màn hình!
-st.set_page_config(page_title="Japan Foodie Sentiment Platform", layout="wide")
 st.title("🏯 Japan Foodie Sentiment Platform")
 
 with st.sidebar:
@@ -270,34 +281,88 @@ if search_button:
             
             with col1:
                 st.subheader("📊 Trực quan hóa: Rating vs Vibe Score")
-                fig, ax = plt.subplots(figsize=(6, 4))
-                sns.scatterplot(data=final_df, x='Rating', y='Vibe_Score', s=120, ax=ax, color="orange")
-                for i in range(final_df.shape[0]):
-                    ax.text(final_df.Rating[i]+0.01, final_df.Vibe_Score[i], final_df.Restaurant[i], fontsize=8)
-                st.pyplot(fig)
-            
+                try:
+                    # 1. Tạo bản sao dữ liệu và tính toán thứ hạng Vibe
+                    plot_df = final_df.copy()
+                    plot_df['Vibe_Rank'] = plot_df['Vibe_Score'].rank(ascending=False, method='min').astype(int)
+                    
+                    # Đổi tên cột trong DataFrame tạm để khi hiện lên bảng thông tin (hover box) nhìn đẹp mắt hơn
+                    plot_df.columns = ['Restaurant', 'Rating', 'Full_Review', 'Link', 'Vibe Score', 'Vibe Rank']
+                    
+                    # 2. Vẽ biểu đồ Scatter tương tác bằng Plotly Express
+                    fig_plotly = px.scatter(
+                        plot_df,
+                        x='Rating',
+                        y='Vibe Score',
+                        hover_name='Restaurant',          # Tên quán hiện to làm tiêu đề hộp thông tin
+                        hover_data={'Vibe Rank': True, 'Rating': ':.2f', 'Vibe Score': ':.2f'}, # Hiện các thông số đã định dạng
+                        title=None
+                    )
+                    
+                    # 3. Thay đổi màu sắc và kích thước chấm tròn cho đồng bộ giao diện Streamlit
+                    fig_plotly.update_traces(marker=dict(size=12, color='#FF4B4B', line=dict(width=1, color='White')))
+                    
+                    # 4. Đẩy biểu đồ Plotly lên giao diện Streamlit
+                    st.plotly_chart(fig_plotly, use_container_width=True)
+                    
+                except Exception as e:
+                    st.error(f"Không thể hiển thị biểu đồ tương tác do: {e}")
+
             with col2:
-                st.subheader("☁️ Word Map: Các tính từ khóa đắt giá nhất")
-                # Gom toàn bộ review của tất cả các quán lại thành một chuỗi lớn để làm WordCloud
+                st.subheader("☁️ Word Map: Khai phá Vibe chuyên sâu (NLP Filtered)")
+                
+                # 1. Gom text
                 all_text = " ".join(final_df['Full_Review'].astype(str))
                 
-                # Cấu hình danh sách từ khóa vô nghĩa cần loại bỏ khỏi WordMap
-                custom_stopwords = set(STOPWORDS)
-                custom_stopwords.update(["restaurant", "food", "place", "order", "ordered", "table", "tabelog", "good", "nice", "eat", "came", "tokyo", "nagoya", "osaka"])
+                # 2. Dùng NLTK tách từ và gắn nhãn từ loại (Tính từ, Danh từ...)
+                words = nltk.word_tokenize(all_text)
+                tagged_words = nltk.pos_tag(words)
                 
-                # Khởi tạo mô hình WordCloud
-                wordcloud = WordCloud(width=600, height=400, 
-                                      background_color='white', 
-                                      stopwords=custom_stopwords, 
-                                      colormap='Set2').generate(all_text)
+                # 3. Lọc thông minh: Chỉ giữ lại từ là Tính từ (JJ) hoặc các từ vận hành cốt lõi
+                intelligent_words = []
+                core_operational_words = ["cash", "card", "lunch", "noon", "queue", "line", "wait", "staff"]
                 
-                fig_wc, ax_wc = plt.subplots(figsize=(6, 4))
-                ax_wc.imshow(wordcloud, interpolation='bilinear')
-                ax_wc.axis('off')
-                st.pyplot(fig_wc)
+                for word, tag in tagged_words:
+                    word_lower = word.lower()
+                    
+                    # Loại bỏ từ khóa tìm kiếm (Món ăn/Thành phố) để tránh loãng hình
+                    if word_lower in city_input.lower() or word_lower in dish_input.lower():
+                        continue
+                        
+                    # JJ: Adjective (Tính từ), JJR: Adjective Comparative, JJS: Adjective Superlative
+                    if tag in ['JJ', 'JJR', 'JJS'] or word_lower in core_operational_words:
+                        # Loại bỏ thêm vài tính từ khen ngợi sáo rỗng
+                        if word_lower not in ["good", "nice", "great", "delicious", "amazing", "excellent"]:
+                            intelligent_words.append(word_lower)
                 
-            # Bảng số liệu chi tiết phía dưới
-            st.subheader("📋 Bảng xếp hạng Insights")
-            st.dataframe(final_df[['Restaurant', 'Rating', 'Vibe_Score']].sort_values(by='Vibe_Score', ascending=False))
-        else:
-            st.warning("Không tìm thấy dữ liệu. Hãy kiểm tra xem bạn đã gõ đúng tên tiếng Anh chưa nha!")
+                # Biến danh sách từ đã lọc thành một chuỗi văn bản mới
+                filtered_text = " ".join(intelligent_words)
+                
+                if filtered_text.strip():
+                    # Vẽ WordCloud từ chuỗi đã được thuật toán lọc sạch dữ liệu rác
+                    wordcloud = WordCloud(width=600, height=400, 
+                                          background_color='white', 
+                                          max_words=50,
+                                          colormap='plasma',
+                                          random_state=42).generate(filtered_text)
+                    
+                    fig_wc, ax_wc = plt.subplots(figsize=(6, 4))
+                    ax_wc.imshow(wordcloud, interpolation='bilinear')
+                    ax_wc.axis('off')
+                    st.pyplot(fig_wc)
+                else:
+                    st.warning("Chưa đủ dữ liệu review để phân tích từ loại thông minh.")
+
+# ------------------------------------------------------------------
+            # PHẦN HIỂN THỊ BẢNG DỮ LIỆU RATING & VIBE SCORE ĐÃ TỐI GIẢN
+            # ------------------------------------------------------------------
+            st.markdown("---") # Đường kẻ ngang phân cách cho đẹp
+            
+            st.subheader("📋 Bảng xếp hạng Insights (Sắp xếp theo thứ tự Rating)")
+            
+            # 1. Lọc chỉ lấy 3 cột quan trọng: Restaurant, Rating, Vibe_Score
+            # 2. Dùng .sort_values để ép sắp xếp theo Rating từ cao xuống thấp (ascending=False)
+            display_df = final_df[['Restaurant','Link', 'Rating', 'Vibe_Score']].sort_values(by='Rating', ascending=False)
+            display_df['Vibe_Rank'] = display_df['Vibe_Score'].rank(ascending=False, method='min')
+            # 3. Hiển thị bảng dạng DataFrame kéo giãn full màn hình cho dễ nhìn
+            st.dataframe(display_df, use_container_width=True)
