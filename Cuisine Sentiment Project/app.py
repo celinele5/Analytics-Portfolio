@@ -262,29 +262,29 @@ def get_full_data_flexible(city_name, dish_name):
 st.title("🏯 Japan Foodie Sentiment Platform")
 
 with st.sidebar:
-    st.header("Cấu hình tìm kiếm")
-    city_input = st.text_input("Nhập Thành phố hoặc Tỉnh (vd: nagoya, tokyo, himeji):", "nagoya")
-    dish_input = st.text_input("Món ăn muốn tìm:", "Miso Katsu")
-    search_button = st.button("Phân tích ngay")
+    st.header("Search Parameters")
+    city_input = st.text_input("Enter City or Prefecture (e.g., nagoya, tokyo, himeji):", "nagoya")
+    dish_input = st.text_input("Dish you want to search for:", "Miso Katsu")
+    search_button = st.button("Analyze Now")
 
 # --- PHẦN 3: LOGIC KHỞI CHẠY ---
 if search_button:
-    with st.spinner(f"Đang bóc tách dữ liệu và phân tích từ khóa chuyên sâu cho món {dish_input}..."):
+    with st.spinner(f"Decomposing and analyzing specialized keywords for dish {dish_input}..."):
         final_df = get_full_data_flexible(city_input, dish_input)
         
         if not final_df.empty:
             # Chấm điểm cảm xúc dựa trên TỔNG HỢP review
-            final_df['Vibe_Score'] = final_df['Full_Review'].apply(lambda x: sia.polarity_scores(str(x))['compound'])
+            final_df['Vibe Score'] = final_df['Full_Review'].apply(lambda x: sia.polarity_scores(str(x))['compound'])
             
             # Giao diện chia làm 2 cột cân xứng cực đẹp
             col1, col2 = st.columns([1, 1])
             
             with col1:
-                st.subheader("📊 Trực quan hóa: Rating vs Vibe Score")
+                st.subheader("📊 Visualization: Rating vs Vibe Score")
                 try:
                     # 1. Tạo bản sao dữ liệu và tính toán thứ hạng Vibe
                     plot_df = final_df.copy()
-                    plot_df['Vibe_Rank'] = plot_df['Vibe_Score'].rank(ascending=False, method='min').astype(int)
+                    plot_df['Vibe Rank'] = plot_df['Vibe Score'].rank(ascending=False, method='min').astype(int)
                     
                     # Đổi tên cột trong DataFrame tạm để khi hiện lên bảng thông tin (hover box) nhìn đẹp mắt hơn
                     plot_df.columns = ['Restaurant', 'Rating', 'Full_Review', 'Link', 'Vibe Score', 'Vibe Rank']
@@ -306,10 +306,10 @@ if search_button:
                     st.plotly_chart(fig_plotly, use_container_width=True)
                     
                 except Exception as e:
-                    st.error(f"Không thể hiển thị biểu đồ tương tác do: {e}")
+                    st.error(f"Cannot display interactive chart due to: {e}")
 
             with col2:
-                st.subheader("☁️ Word Map: Khai phá Vibe chuyên sâu (NLP Filtered)")
+                st.subheader("☁️ Word Map: Uncover Vibe Beneath the Surface (NLP Filtered)")
                 
                 # 1. Gom text
                 all_text = " ".join(final_df['Full_Review'].astype(str))
@@ -351,18 +351,18 @@ if search_button:
                     ax_wc.axis('off')
                     st.pyplot(fig_wc)
                 else:
-                    st.warning("Chưa đủ dữ liệu review để phân tích từ loại thông minh.")
+                    st.warning("Not enough review data to perform intelligent lexical analysis.")
 
 # ------------------------------------------------------------------
             # PHẦN HIỂN THỊ BẢNG DỮ LIỆU RATING & VIBE SCORE ĐÃ TỐI GIẢN
             # ------------------------------------------------------------------
             st.markdown("---") # Đường kẻ ngang phân cách cho đẹp
             
-            st.subheader("📋 Bảng xếp hạng Insights (Sắp xếp theo thứ tự Rating)")
+            st.subheader("📋 Table of Insights (Ascending order of Rating)")
             
             # 1. Lọc chỉ lấy 3 cột quan trọng: Restaurant, Rating, Vibe_Score
             # 2. Dùng .sort_values để ép sắp xếp theo Rating từ cao xuống thấp (ascending=False)
-            display_df = final_df[['Restaurant','Link', 'Rating', 'Vibe_Score']].sort_values(by='Rating', ascending=False)
-            display_df['Vibe_Rank'] = display_df['Vibe_Score'].rank(ascending=False, method='min')
+            display_df = final_df[['Restaurant','Link', 'Rating', 'Vibe Score']].sort_values(by='Rating', ascending=False)
+            display_df['Vibe Rank'] = display_df['Vibe Score'].rank(ascending=False, method='min')
             # 3. Hiển thị bảng dạng DataFrame kéo giãn full màn hình cho dễ nhìn
             st.dataframe(display_df, use_container_width=True)
